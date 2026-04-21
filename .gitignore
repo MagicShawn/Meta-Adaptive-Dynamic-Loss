@@ -1,0 +1,51 @@
+# C++ / ROS / CMake
+build/
+devel/
+install/
+log/
+.catkin_workspace
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+compile_commands.json
+*.so
+*.o
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.env
+.venv
+venv/
+ENV/
+
+# Deep Learning Models
+*.pth
+*.pt
+*.onnx
+
+# OS / IDE
+.vscode/
+.DS_Store
+*.swp
+*.swo
