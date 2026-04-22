@@ -25,13 +25,13 @@ class InferenceBackbone:
         self.no_odom = no_odom
         self.depth_scale = float(depth_scale)
         self.model = WorkNet(dim_obs=7+3 if not no_odom else 4+3, dim_action=6, max_seq_len=32).eval()
-        state_dict = torch.load(net_weight, map_location='cpu')
+        state_dict = torch.load(net_weight, map_location='cpu', weights_only=True)
         self.model.load_state_dict(state_dict, strict=True)
         self.state_norm_mean = None
         self.state_norm_var = None
         self.state_norm_eps = 1e-5
         if norm_ckpt and os.path.isfile(norm_ckpt):
-            norm_state = torch.load(norm_ckpt, map_location='cpu')
+            norm_state = torch.load(norm_ckpt, map_location='cpu', weights_only=True)
             if isinstance(norm_state, dict) and 'mean' in norm_state and 'var' in norm_state:
                 self.state_norm_mean = norm_state['mean'].float()
                 self.state_norm_var = norm_state['var'].float().clamp_min(1e-8)

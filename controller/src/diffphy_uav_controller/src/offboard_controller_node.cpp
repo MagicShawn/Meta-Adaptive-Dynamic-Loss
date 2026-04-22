@@ -32,7 +32,7 @@ class OffboardControllerNode {
         has_des_acc_(false),
         last_yaw_(0.0),
         prearm_setpoint_count_(0) {
-    pnh_.param("hover_thrust", hover_thrust_, 0.4);
+    pnh_.param("hover_thrust", hover_thrust_, 0.5);
     pnh_.param("ctrl_rate", ctrl_rate_, 50.0);
     pnh_.param("cmd_timeout", cmd_timeout_, 0.5);
 
@@ -79,11 +79,15 @@ class OffboardControllerNode {
     msg.type_mask = mavros_msgs::AttitudeTarget::IGNORE_ROLL_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_PITCH_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_YAW_RATE;
+                    
+    // NWU/FLU identity attitude is the same as NED/FRD identity
+    // q_ned = (w, x, -y, -z) = (1, 0, 0, 0)
     msg.orientation.w = 1.0;
     msg.orientation.x = 0.0;
-    msg.orientation.y = 0.0;
-    msg.orientation.z = 0.0;
+    msg.orientation.y = -0.0;
+    msg.orientation.z = -0.0;
     msg.thrust = std::max(0.0, std::min(thrust, 1.0));
+
     attitude_pub_.publish(msg);
   }
 
@@ -158,16 +162,23 @@ class OffboardControllerNode {
     msg.type_mask = mavros_msgs::AttitudeTarget::IGNORE_ROLL_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_PITCH_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_YAW_RATE;
-    msg.orientation = output.attitude;
+                    
+    // NWU to NED orientation conversion: q_ned = (w_nwu, x_nwu, -y_nwu, -z_nwu)
+    msg.orientation.w = output.attitude.w;
+    msg.orientation.x = output.attitude.x;
+    msg.orientation.y = -output.attitude.y;
+    msg.orientation.z = -output.attitude.z;
     msg.thrust = output.thrust;
+
     attitude_pub_.publish(msg);
 
-    tf2::Quaternion q(msg.orientation.x, msg.orientation.y, msg.orientation.z,
-                      msg.orientation.w);
+    // Keep NWU yaw for next loop's mapper computation (since mapper expects NWU)
+    tf2::Quaternion q_nwu(output.attitude.x, output.attitude.y, output.attitude.z,
+                          output.attitude.w);
     double roll = 0.0;
     double pitch = 0.0;
     double yaw = 0.0;
-    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+    tf2::Matrix3x3(q_nwu).getRPY(roll, pitch, yaw);
     last_yaw_ = yaw;
   }
 

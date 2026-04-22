@@ -1,8 +1,8 @@
 <launch>
-  <rosparam file="$(find diffphy_uav_controller)/config/controller.yaml" command="load"/>
-
   <node pkg="diffphy_uav_controller"
         type="offboard_controller_node"
         name="offboard_controller_node"
-        output="screen"/>
+        output="screen">
+    <rosparam file="$(find diffphy_uav_controller)/config/controller.yaml" command="load"/>
+  </node>
 </launch>
