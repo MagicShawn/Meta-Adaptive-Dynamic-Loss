@@ -35,6 +35,11 @@ add_executable(offboard_controller_node
   src/offboard_controller_node.cpp
 )
 
+catkin_install_python(PROGRAMS
+  scripts/fixed_cmd_publisher.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 target_link_libraries(offboard_controller_node
   attitude_mapper
   ${catkin_LIBRARIES}

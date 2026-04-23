@@ -13,6 +13,7 @@
 #include <Eigen/Core>
 
 #include "diffphy_uav_controller/attitude_mapper.h"
+#include "diffphy_uav_controller/frame_transform.h"
 
 namespace {
 
@@ -79,13 +80,14 @@ class OffboardControllerNode {
     msg.type_mask = mavros_msgs::AttitudeTarget::IGNORE_ROLL_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_PITCH_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_YAW_RATE;
-                    
-    // NWU/FLU identity attitude is the same as NED/FRD identity
-    // q_ned = (w, x, -y, -z) = (1, 0, 0, 0)
-    msg.orientation.w = 1.0;
-    msg.orientation.x = 0.0;
-    msg.orientation.y = -0.0;
-    msg.orientation.z = -0.0;
+
+    // Identity attitude stays identity under the NWU -> ENU frame transform.
+    const tf2::Quaternion q_nwu(0.0, 0.0, 0.0, 1.0);
+    const tf2::Quaternion q_enu = diffphy_uav_controller::NWUQuatToENU(q_nwu);
+    msg.orientation.w = q_enu.w();
+    msg.orientation.x = q_enu.x();
+    msg.orientation.y = q_enu.y();
+    msg.orientation.z = q_enu.z();
     msg.thrust = std::max(0.0, std::min(thrust, 1.0));
 
     attitude_pub_.publish(msg);
@@ -163,18 +165,19 @@ class OffboardControllerNode {
                     mavros_msgs::AttitudeTarget::IGNORE_PITCH_RATE |
                     mavros_msgs::AttitudeTarget::IGNORE_YAW_RATE;
                     
-    // NWU to NED orientation conversion: q_ned = (w_nwu, x_nwu, -y_nwu, -z_nwu)
-    msg.orientation.w = output.attitude.w;
-    msg.orientation.x = output.attitude.x;
-    msg.orientation.y = -output.attitude.y;
-    msg.orientation.z = -output.attitude.z;
+    const tf2::Quaternion q_nwu(output.attitude.x, output.attitude.y, output.attitude.z,
+                  output.attitude.w);
+    const tf2::Quaternion q_neu = diffphy_uav_controller::NWUQuatToENU(q_nwu);
+
+    msg.orientation.w = q_neu.w();
+    msg.orientation.x = q_neu.x();
+    msg.orientation.y = q_neu.y();
+    msg.orientation.z = q_neu.z();
     msg.thrust = output.thrust;
 
     attitude_pub_.publish(msg);
 
     // Keep NWU yaw for next loop's mapper computation (since mapper expects NWU)
-    tf2::Quaternion q_nwu(output.attitude.x, output.attitude.y, output.attitude.z,
-                          output.attitude.w);
     double roll = 0.0;
     double pitch = 0.0;
     double yaw = 0.0;

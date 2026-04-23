@@ -150,7 +150,6 @@ sleep 2
 
 
 echo -e "${GREEN}所有进程已启动。按 Ctrl+C 终止。${NC}"
-echo -e "${YELLOW}当前运行的进程 PID: ${PIDS[*]}${NC}"
 
 # 等待所有后台进程（保持脚本运行）
 wait

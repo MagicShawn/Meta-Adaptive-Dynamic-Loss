@@ -30,7 +30,7 @@ def main():
     target_pt.x = 0.0
     target_pt.y = 0.0
     # 此处 Z 轴数值根据无人机坐标系调整。如果是 NED 坐标系，-2 往往代表以相对起飞点 2m 的高度巡航
-    target_pt.z = -2.0 
+    target_pt.z = 2.0 
     
     rospy.loginfo("开始在话题 %s 发布 50m 直线轨迹目标点...", topic_name)
     

@@ -4,12 +4,13 @@ import rospy
 import yaml
 from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point, Vector3, Vector3Stamped
+from geometry_msgs.msg import Point, Vector3Stamped
 from cv_bridge import CvBridge
 import numpy as np
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from policy.backbone import InferenceBackbone
+from utils import enu_quat_to_nwu, enu_vec_to_nwu
 
 class DeployNode:
     def __init__(self, config_path=None):
@@ -24,8 +25,7 @@ class DeployNode:
             
         with open(config_file, 'r') as f:
             cfg = yaml.safe_load(f)
-        
-        # 将配置保存到 self 供全局使用
+            
         self.cfg = cfg
         rospy.loginfo(f"Successfully loaded config from: {config_file}")
         rospy.loginfo(f"Target topic set to: {self.cfg.get('target_topic')}")
@@ -51,19 +51,24 @@ class DeployNode:
             depth_scale=depth_scale,
         )
         self.bridge = CvBridge()
-        self.depth_img = None
+        # self.depth_img = None
         self.odom = None
-        self.target = {'position': [10.0, 0.0, 0.5]}
+        self.target = {'position': [20.0, 0.0, 5.0]}
         self.margin = self.cfg.get('margin', 0.1)
         self.target_speed = self.cfg.get('target_speed', 10)
-        # 订阅深度、里程计、目标点
+        self.missing_input_warn_period = cfg.get('missing_input_warn_period', 1.0)
+        self.rate_hz = float(cfg.get('rate_hz', 20.0))
+        if self.rate_hz <= 0:
+            raise ValueError('rate_hz must be > 0')
+        self.min_publish_period = 1.0 / self.rate_hz
+        self.last_publish_time = rospy.Time(0)
+        
         rospy.Subscriber(self.cfg['depth_topic'], Image, self.depth_cb, queue_size=1)
         rospy.Subscriber(self.cfg['odom_topic'], Odometry, self.odom_cb, queue_size=1)
         rospy.Subscriber(self.cfg['target_topic'], Point, self.target_cb, queue_size=1)
-        # 发布加速度、速度
         self.acc_pub = rospy.Publisher(self.cfg['des_acc_topic'], Vector3Stamped, queue_size=1)
         self.vel_pub = rospy.Publisher(self.cfg['des_vel_topic'], Vector3Stamped, queue_size=1)
-        self.rate_hz = self.cfg.get('rate_hz', 20)
+        # self.rate_hz = self.cfg.get('rate_hz', 20)
 
     def depth_cb(self, msg):
         try:
@@ -73,45 +78,87 @@ class DeployNode:
                 img = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width)
             else:
                 img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
-            self.depth_img = img
         except Exception as e:
             rospy.logwarn(f"Depth image conversion failed: {e}")
+            return
+        if self.odom is None or self.target is None:
+            rospy.logwarn_throttle(
+                self.missing_input_warn_period,
+                'Waiting for odom/target before depth-triggered inference',
+            )
+            return
+        
+        # Keep publish behavior deterministic when depth topic runs faster than control rate.
+        now = rospy.Time.now()
+        if self.last_publish_time != rospy.Time(0):
+            if (now - self.last_publish_time).to_sec() < self.min_publish_period:
+                return
+
+        des_acc, des_vel, _ = self.backbone.predict(
+            img,
+            self.odom,
+            self.target,
+            self.margin,
+            self.target_speed,
+        )
+        now = rospy.Time.now()
+
+        acc_msg = Vector3Stamped()
+        acc_msg.header.stamp = now
+        acc_msg.vector.x, acc_msg.vector.y, acc_msg.vector.z = des_acc.tolist()
+
+        vel_msg = Vector3Stamped()
+        vel_msg.header.stamp = now
+        vel_msg.vector.x, vel_msg.vector.y, vel_msg.vector.z = des_vel.tolist()
+
+        self.acc_pub.publish(acc_msg)
+        self.vel_pub.publish(vel_msg)
+        self.last_publish_time = now
 
     def odom_cb(self, msg):
-        # NED (X-向前, Y-向右, Z-向下) 转 NWU/FLU (X-向前, Y-向左, Z-向上)
-        pos = [msg.pose.pose.position.x, -msg.pose.pose.position.y, -msg.pose.pose.position.z]
-        # 四元数 NED 到 NWU 的坐标变换推导：
-        # q_nwu = q_rot * q_ned * q_rot^-1，其中绕X轴转180度 q_rot = (0, 1, 0, 0)
-        # 展开乘法后恰好等同于仅对 Y 和 Z 取负，即 [qw, qx, -qy, -qz]
-        qw, qx, qy, qz = msg.pose.pose.orientation.w, msg.pose.pose.orientation.x, msg.pose.pose.orientation.y, msg.pose.pose.orientation.z
-        q = [qw, qx, -qy, -qz]
-        
-        v = [msg.twist.twist.linear.x, -msg.twist.twist.linear.y, -msg.twist.twist.linear.z]
+        # ENU (X-east, Y-north, Z-up) -> NWU (X-north, Y-west, Z-up)
+        pos = enu_vec_to_nwu(
+            msg.pose.pose.position.x,
+            msg.pose.pose.position.y,
+            msg.pose.pose.position.z,
+        )
+        qw = msg.pose.pose.orientation.w
+        qx = msg.pose.pose.orientation.x
+        qy = msg.pose.pose.orientation.y
+        qz = msg.pose.pose.orientation.z
+        q = enu_quat_to_nwu(qw, qx, qy, qz)
+        v = enu_vec_to_nwu(
+            msg.twist.twist.linear.x,
+            msg.twist.twist.linear.y,
+            msg.twist.twist.linear.z,
+        )
         self.odom = {'position': pos, 'quaternion': q, 'linear_velocity': v}
+        
 
     def target_cb(self, msg):
         # 记录接收到的原始数据，判断是否有数据进来
         rospy.loginfo_once(f"Received target point: x={msg.x}, y={msg.y}, z={msg.z}")
-        # 同样需要将目标点从 NED 转为 NWU
-        self.target = {'position': [msg.x, -msg.y, -msg.z]}
+        # ENU (X-east, Y-north, Z-up) -> NWU (X-north, Y-west, Z-up)
+        self.target = {'position': enu_vec_to_nwu(msg.x, msg.y, msg.z)}
 
     def spin(self):
-        rate = rospy.Rate(self.rate_hz)
-        while not rospy.is_shutdown():
-            if self.depth_img is not None and self.odom is not None and self.target is not None:
-                des_acc, des_vel, _ = self.backbone.predict(self.depth_img, self.odom, self.target, self.margin, self.target_speed)
+        rospy.spin()
+        # rate = rospy.Rate(self.rate_hz)
+        # while not rospy.is_shutdown():
+        #     if self.depth_img is not None and self.odom is not None and self.target is not None:
+        #         des_acc, des_vel, _ = self.backbone.predict(self.depth_img, self.odom, self.target, self.margin, self.target_speed)
                 
-                acc_msg = Vector3Stamped()
-                acc_msg.header.stamp = rospy.Time.now()
-                acc_msg.vector.x, acc_msg.vector.y, acc_msg.vector.z = des_acc.tolist()
+        #         acc_msg = Vector3Stamped()
+        #         acc_msg.header.stamp = rospy.Time.now()
+        #         acc_msg.vector.x, acc_msg.vector.y, acc_msg.vector.z = des_acc.tolist()
                 
-                vel_msg = Vector3Stamped()
-                vel_msg.header.stamp = rospy.Time.now()
-                vel_msg.vector.x, vel_msg.vector.y, vel_msg.vector.z = des_vel.tolist()
+        #         vel_msg = Vector3Stamped()
+        #         vel_msg.header.stamp = rospy.Time.now()
+        #         vel_msg.vector.x, vel_msg.vector.y, vel_msg.vector.z = des_vel.tolist()
                 
-                self.acc_pub.publish(acc_msg)
-                self.vel_pub.publish(vel_msg)
-            rate.sleep()
+        #         self.acc_pub.publish(acc_msg)
+        #         self.vel_pub.publish(vel_msg)
+        #     rate.sleep()
 
 if __name__ == '__main__':
     import sys
