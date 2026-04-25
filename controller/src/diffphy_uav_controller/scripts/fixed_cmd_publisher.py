@@ -19,13 +19,13 @@ def main():
     acc_topic = rospy.get_param("~acc_topic", "/controller/des_acc")
     rate_hz = float(rospy.get_param("~rate", 20.0))
 
-    vel_x = float(rospy.get_param("~vel_x", 0.0))
+    vel_x = float(rospy.get_param("~vel_x", 10.0))
     vel_y = float(rospy.get_param("~vel_y", 0.0))
     vel_z = float(rospy.get_param("~vel_z", 0.0))
 
     acc_x = float(rospy.get_param("~acc_x", 0.0))
-    acc_y = float(rospy.get_param("~acc_y", 0.0))
-    acc_z = float(rospy.get_param("~acc_z", 0.0))
+    acc_y = float(rospy.get_param("~acc_y", 2.0))
+    acc_z = float(rospy.get_param("~acc_z", 10.0))
 
     vel_pub = rospy.Publisher(vel_topic, Vector3Stamped, queue_size=10)
     acc_pub = rospy.Publisher(acc_topic, Vector3Stamped, queue_size=10)

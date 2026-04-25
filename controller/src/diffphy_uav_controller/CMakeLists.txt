@@ -37,6 +37,7 @@ add_executable(offboard_controller_node
 
 catkin_install_python(PROGRAMS
   scripts/fixed_cmd_publisher.py
+  scripts/drone_frame_viz.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

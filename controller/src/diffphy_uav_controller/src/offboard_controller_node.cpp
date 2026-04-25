@@ -59,7 +59,8 @@ class OffboardControllerNode {
 
  private:
   void OnDesiredVelocity(const geometry_msgs::Vector3Stamped::ConstPtr& msg) {
-    desired_velocity_ = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
+    desired_velocity_ = Eigen::Vector3d(msg->vector.x, 0*msg->vector.y, 0*msg->vector.z);
+    // desired_velocity_ = Eigen::Vector3d(10,0,2);
     has_des_vel_ = true;
     last_cmd_time_ = ros::Time::now();
   }
@@ -88,7 +89,7 @@ class OffboardControllerNode {
     msg.orientation.x = q_enu.x();
     msg.orientation.y = q_enu.y();
     msg.orientation.z = q_enu.z();
-    msg.thrust = std::max(0.0, std::min(thrust, 1.0));
+    msg.thrust = std::max(0.0, std::min(thrust, 0.9));
 
     attitude_pub_.publish(msg);
   }

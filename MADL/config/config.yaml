@@ -1,12 +1,12 @@
 net_weight: '../policy/models/worker_ckpt_017999.pth'
 norm_ckpt: '../policy/models/norm_ckpt_017999.pth'
 no_odom: false
-depth_scale: 1
+depth_scale: 1000
 margin: 0.2
-target_speed: 10.0
+target_speed: 1.0
 depth_topic: '/airsim_node/PX4/depth/DepthPlanar'
 odom_topic: '/mavros/local_position/odom'
 target_topic: '/target_point'
 des_acc_topic: '/controller/des_acc'
 des_vel_topic: '/controller/des_vel'
-rate_hz: 50
+rate_hz: 10

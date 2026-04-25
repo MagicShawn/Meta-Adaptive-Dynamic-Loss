@@ -127,26 +127,26 @@ else
 fi
 
 
-# ========== 6. 启动 MADL Python 节点（conda 环境 yopo） ==========
-echo -e "${GREEN}[6/7] 启动 MADL Python 节点 (conda env: yopo)...${NC}"
-cd /home/sean/work_ws/diff_deploy/MADL || exit 1
-conda activate yopo
-python test_madl_ros.py &
-PIDS+=($!)
-echo "   MADL Python PID: ${PIDS[-1]}"
-# 返回原目录（可选）
-cd "$SCRIPT_DIR"
-sleep 1
+# # ========== 6. 启动 MADL Python 节点（conda 环境 yopo） ==========
+# echo -e "${GREEN}[6/7] 启动 MADL Python 节点 (conda env: yopo)...${NC}"
+# cd /home/sean/work_ws/diff_deploy/MADL || exit 1
+# conda activate yopo
+# python test_madl_ros.py &
+# PIDS+=($!)
+# echo "   MADL Python PID: ${PIDS[-1]}"
+# # 返回原目录（可选）
+# cd "$SCRIPT_DIR"
+# sleep 1
 
-# ========== 7. 启动 offboard_controller ==========
-echo -e "${GREEN}[7/7] 启动 offboard_controller...${NC}"
-cd /home/sean/work_ws/diff_deploy/controller || exit 1
-source devel/setup.bash
-roslaunch diffphy_uav_controller offboard_controller.launch &
-PIDS+=($!)
-echo "   offboard_controller PID: ${PIDS[-1]}"
-cd "$SCRIPT_DIR"
-sleep 2
+# # ========== 7. 启动 offboard_controller ==========
+# echo -e "${GREEN}[7/7] 启动 offboard_controller...${NC}"
+# cd /home/sean/work_ws/diff_deploy/controller || exit 1
+# source devel/setup.bash
+# roslaunch diffphy_uav_controller offboard_controller.launch &
+# PIDS+=($!)
+# echo "   offboard_controller PID: ${PIDS[-1]}"
+# cd "$SCRIPT_DIR"
+# sleep 2
 
 
 echo -e "${GREEN}所有进程已启动。按 Ctrl+C 终止。${NC}"

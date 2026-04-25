@@ -6,6 +6,7 @@ from sensor_msgs.msg import Image
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Point, Vector3Stamped
 from cv_bridge import CvBridge
+import cv2
 import numpy as np
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -53,19 +54,25 @@ class DeployNode:
         self.bridge = CvBridge()
         # self.depth_img = None
         self.odom = None
-        self.target = {'position': [20.0, 0.0, 5.0]}
+        self.target = {'position': [100.0, 0.0, 4.0]}
         self.margin = self.cfg.get('margin', 0.1)
         self.target_speed = self.cfg.get('target_speed', 10)
         self.missing_input_warn_period = cfg.get('missing_input_warn_period', 1.0)
+        
+        self.height = self.cfg.get('height', 640)
+        self.width = self.cfg.get('width', 480)
+        self.max_dis = self.cfg.get('max_dis', 10.0)
+        self.min_dis = self.cfg.get('min_dis', 0.1)
+
         self.rate_hz = float(cfg.get('rate_hz', 20.0))
         if self.rate_hz <= 0:
             raise ValueError('rate_hz must be > 0')
         self.min_publish_period = 1.0 / self.rate_hz
         self.last_publish_time = rospy.Time(0)
         
-        rospy.Subscriber(self.cfg['depth_topic'], Image, self.depth_cb, queue_size=1)
         rospy.Subscriber(self.cfg['odom_topic'], Odometry, self.odom_cb, queue_size=1)
         rospy.Subscriber(self.cfg['target_topic'], Point, self.target_cb, queue_size=1)
+        rospy.Subscriber(self.cfg['depth_topic'], Image, self.depth_cb, queue_size=1)
         self.acc_pub = rospy.Publisher(self.cfg['des_acc_topic'], Vector3Stamped, queue_size=1)
         self.vel_pub = rospy.Publisher(self.cfg['des_vel_topic'], Vector3Stamped, queue_size=1)
         # self.rate_hz = self.cfg.get('rate_hz', 20)
@@ -75,12 +82,21 @@ class DeployNode:
             if msg.encoding == '32FC1':
                 img = np.frombuffer(msg.data, dtype=np.float32).reshape(msg.height, msg.width)
             elif msg.encoding == '16UC1':
-                img = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width)
+                img = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width).astype(np.float32) / 1000.0
             else:
                 img = self.bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
         except Exception as e:
             rospy.logwarn(f"Depth image conversion failed: {e}")
             return
+            
+        if img.shape[0] != self.height or img.shape[1] != self.width:
+            img = cv2.resize(img, (self.width, self.height), interpolation=cv2.INTER_NEAREST)
+        img = np.minimum(img, self.max_dis) / self.max_dis
+
+        nan_mask = np.isnan(img) | (img < self.min_dis / self.max_dis)
+        interpolated_image = cv2.inpaint(np.uint8(img * 255), np.uint8(nan_mask), 1, cv2.INPAINT_NS)
+        img = interpolated_image.astype(np.float32) / 255.0
+        
         if self.odom is None or self.target is None:
             rospy.logwarn_throttle(
                 self.missing_input_warn_period,
@@ -93,7 +109,7 @@ class DeployNode:
         if self.last_publish_time != rospy.Time(0):
             if (now - self.last_publish_time).to_sec() < self.min_publish_period:
                 return
-
+        rospy.loginfo_throttle(1.0, f"Running inference at {now.to_sec():.2f}s with target {self.target['position']} and odom pos {self.odom['position']}")
         des_acc, des_vel, _ = self.backbone.predict(
             img,
             self.odom,
@@ -102,7 +118,6 @@ class DeployNode:
             self.target_speed,
         )
         now = rospy.Time.now()
-
         acc_msg = Vector3Stamped()
         acc_msg.header.stamp = now
         acc_msg.vector.x, acc_msg.vector.y, acc_msg.vector.z = des_acc.tolist()
@@ -110,6 +125,7 @@ class DeployNode:
         vel_msg = Vector3Stamped()
         vel_msg.header.stamp = now
         vel_msg.vector.x, vel_msg.vector.y, vel_msg.vector.z = des_vel.tolist()
+        rospy.loginfo_throttle(1.0, f"Publishing des_acc: {des_acc}, des_vel: {des_vel}")
 
         self.acc_pub.publish(acc_msg)
         self.vel_pub.publish(vel_msg)

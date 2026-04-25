@@ -24,6 +24,7 @@ ControlOutput AttitudeMapper::Compute(const Eigen::Vector3d& desired_velocity,
   output.valid = false;
 
   const Eigen::Vector3d gravity(0.0, 0.0, -kGravity);
+  // const Eigen::Vector3d total_acc = desired_acceleration - gravity
   const Eigen::Vector3d total_acc = desired_acceleration - gravity;
   const double total_acc_norm = total_acc.norm();
   if (total_acc_norm < kEpsilon) {
@@ -31,21 +32,21 @@ ControlOutput AttitudeMapper::Compute(const Eigen::Vector3d& desired_velocity,
   }
 
   Eigen::Vector3d z_b = total_acc / total_acc_norm;
-
   // Build heading reference on the plane orthogonal to z_b.
-  Eigen::Vector3d x_c = desired_velocity - desired_velocity.dot(z_b) * z_b; // remove component along z_b
-  if (x_c.norm() < kVelocityEpsilon) {
-    Eigen::Vector3d yaw_ref(std::cos(last_yaw), std::sin(last_yaw), 0.0);
-    x_c = yaw_ref - yaw_ref.dot(z_b) * z_b;
-    // if (x_c.norm() < kVelocityEpsilon) {
-    //   Eigen::Vector3d fallback_axis(1.0, 0.0, 0.0);
-    //   x_c = fallback_axis - fallback_axis.dot(z_b) * z_b;
-    //   if (x_c.norm() < kVelocityEpsilon) {
-    //     fallback_axis = Eigen::Vector3d(0.0, 1.0, 0.0);
-    //     x_c = fallback_axis - fallback_axis.dot(z_b) * z_b;
-    //   }
-    // }
-  }
+  // Eigen::Vector3d x_c = desired_velocity - desired_velocity.dot(z_b) * z_b; // remove component along z_b
+  // if (x_c.norm() < kVelocityEpsilon) {
+  //   Eigen::Vector3d yaw_ref(std::cos(last_yaw), std::sin(last_yaw), 0.0);
+  //   x_c = yaw_ref - yaw_ref.dot(z_b) * z_b;
+  //   // if (x_c.norm() < kVelocityEpsilon) {
+  //   //   Eigen::Vector3d fallback_axis(1.0, 0.0, 0.0);
+  //   //   x_c = fallback_axis - fallback_axis.dot(z_b) * z_b;
+  //   //   if (x_c.norm() < kVelocityEpsilon) {
+  //   //     fallback_axis = Eigen::Vector3d(0.0, 1.0, 0.0);
+  //   //     x_c = fallback_axis - fallback_axis.dot(z_b) * z_b;
+  //   //   }
+  //   // }
+  // }
+  Eigen::Vector3d x_c = desired_velocity / desired_velocity.norm(); // desired velocity direction as heading reference
   x_c.normalize();
 
   Eigen::Vector3d y_b = z_b.cross(x_c);

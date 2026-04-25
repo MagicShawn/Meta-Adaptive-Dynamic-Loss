@@ -64,7 +64,7 @@ class InferenceBackbone:
 
         margin_tensor = torch.tensor([margin], dtype=p.dtype, device=p.device)
         state = [target_v[None] @ R, env_R[None, 2], margin_tensor[None]]
-        global_v = v @ env_R.T
+        global_v = v @ env_R
         if not self.no_odom:
             state.insert(0, global_v[None] @ R)
         state = torch.cat(state, -1)
@@ -96,6 +96,6 @@ class InferenceBackbone:
         R = quaternion_to_matrix(q)
         a_world, v_world, *_ = (R @ act.reshape(3, -1)).unbind(-1) # 解码模式保持一致
         des_acc = a_world - v_world
-        des_acc[2] += 9.81  # 补充 z 轴重力补偿
+        # des_acc[2] += 9.81  # 补充 z 轴重力补偿
         des_vel = v_world
         return des_acc.numpy(), des_vel.numpy(), {'a_world': a_world.numpy(), 'v_world': v_world.numpy()}

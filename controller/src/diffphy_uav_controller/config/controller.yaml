@@ -1,3 +1,3 @@
-hover_thrust: 0.55
+hover_thrust: 0.6
 ctrl_rate: 50
-cmd_timeout: 1
+cmd_timeout: 5
