@@ -49,6 +49,42 @@ class InferenceBackbone:
         depth = F.max_pool2d(depth, (3, 3))
         return depth
 
+    @staticmethod
+    def _to_u8_image(depth_tensor):
+        """Convert preprocessed depth tensor to a uint8 grayscale image.
+
+        The preprocessing output is typically in a small range (roughly [-0.6, 9.4]).
+        For debugging/visualization, we min-max scale per-frame to [0, 255].
+        """
+        if isinstance(depth_tensor, torch.Tensor):
+            x = depth_tensor.detach().cpu()
+        else:
+            x = torch.as_tensor(depth_tensor)
+        if x.ndim == 4:
+            x = x[0, 0]
+        x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+        mn = float(x.min())
+        mx = float(x.max())
+        if mx - mn < 1e-12:
+            img = torch.zeros_like(x, dtype=torch.uint8)
+        else:
+            img = ((x - mn) / (mx - mn) * 255.0).clamp(0, 255).to(torch.uint8)
+        return img.numpy()
+
+    def save_preprocessed_depth(self, depth_tensor, path):
+        """Save preprocessed depth tensor as an 8-bit PNG for inspection."""
+        import os
+        try:
+            import cv2
+        except Exception as e:
+            raise ImportError('Saving requires opencv-python (cv2) to be installed') from e
+
+        os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+        img_u8 = self._to_u8_image(depth_tensor)
+        ok = cv2.imwrite(path, img_u8)
+        if not ok:
+            raise IOError(f'Failed to write image to {path!r}')
+
     def build_state(self, odom, target, margin=0.2, target_speed=1.0):
         p = torch.as_tensor(self._field(odom, 'position'), dtype=torch.float32)
         q = torch.as_tensor(self._field(odom, 'quaternion'), dtype=torch.float32)
