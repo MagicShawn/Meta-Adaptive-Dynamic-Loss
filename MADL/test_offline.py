@@ -56,6 +56,9 @@ def main():
     # Simulating a depth image (e.g., RealSense 480x640, values in mm)
     # The depth image cb originally gives a numpy array.
     dummy_depth = np.random.randint(0, 5000, size=(480, 640), dtype=np.uint16)
+
+    # Optional: save preprocessed depth image for inspection
+    save_preprocessed = os.environ.get('MADL_SAVE_PREPROCESSED', '').strip().lower() in {'1', 'true', 'yes'}
     
     dummy_odom = {
         'position': [0.0, 0.0, 1.0],
@@ -71,6 +74,11 @@ def main():
     print("\n--- 执行单次前向传播测试 ---")
     try:
         # Predict API: predict(self, depth_img, odom, target, margin, target_speed)
+        if save_preprocessed:
+            pre = backbone.preprocess_depth(dummy_depth)
+            out_path = os.path.join(base_dir, 'outputs', 'preprocessed_depth.png')
+            backbone.save_preprocessed_depth(pre, out_path)
+            print(f"[V] 已保存预处理图像: {out_path}")
         des_acc, des_vel, _ = backbone.predict(dummy_depth, dummy_odom, dummy_target, margin, target_speed)
         print(f"[V] 前向传播成功!")
         print(f"  - 输出加速度 (des_acc): {des_acc}, 形状: {des_acc.shape}")
